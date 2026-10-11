@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}Carrito | SportZone{% endblock %}
+{% block content %}
+<section class="page-header"><div class="container"><span class="eyebrow">TU COMPRA</span><h1>Carrito</h1><p>Revisa cantidades y disponibilidad antes de pagar.</p></div></section>
+<section class="py-5">
+  <div class="container">
+    {% if items %}
+      <div class="row g-4">
+        <div class="col-lg-8">
+          <div class="table-responsive cart-panel">
+            <table class="table align-middle mb-0">
+              <thead><tr><th>Producto</th><th>Precio</th><th style="width:145px">Cantidad</th><th>Total</th><th></th></tr></thead>
+              <tbody>
+                {% for item in items %}
+                <tr data-cart-row="{{ item.product['id'] }}">
+                  <td><div class="cart-product"><img src="{{ item.product['image_url'] }}" alt=""><div><strong>{{ item.product['name'] }}</strong><span>{{ item.product['brand'] }} · Stock {{ item.product['stock'] }}</span></div></div></td>
+                  <td>{{ format_cop(item.product['price']) }}</td>
+                  <td><div class="quantity-control"><button class="quantity-btn" data-action="decrease" data-product-id="{{ item.product['id'] }}">−</button><input class="quantity-input" value="{{ item.quantity }}" readonly><button class="quantity-btn" data-action="increase" data-product-id="{{ item.product['id'] }}" data-stock="{{ item.product['stock'] }}">+</button></div></td>
+                  <td class="fw-bold">{{ format_cop(item.line_total) }}</td>
+                  <td><button class="btn btn-sm btn-outline-danger remove-cart-btn" data-product-id="{{ item.product['id'] }}"><i class="fa-solid fa-trash"></i></button></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="col-lg-4">
+          <aside class="summary-card">
+            <h2>Resumen</h2>
+            <div><span>Subtotal</span><strong>{{ format_cop(subtotal) }}</strong></div>
+            <div><span>Envío</span><strong>{% if shipping == 0 %}Gratis{% else %}{{ format_cop(shipping) }}{% endif %}</strong></div>
+            <div class="summary-total"><span>Total</span><strong>{{ format_cop(total) }}</strong></div>
+            {% if g.user %}<a class="btn btn-warning btn-lg w-100 fw-bold mt-3" href="{{ url_for('checkout') }}">Continuar al pago</a>{% else %}<a class="btn btn-primary btn-lg w-100 fw-bold mt-3" href="{{ url_for('login', next=url_for('checkout')) }}">Ingresar para pagar</a>{% endif %}
+            <p class="small text-muted mt-3 mb-0"><i class="fa-solid fa-circle-info me-1"></i>El inventario se descontará únicamente al confirmar el pago de prueba.</p>
+          </aside>
+        </div>
+      </div>
+    {% else %}
+      <div class="empty-state"><i class="fa-solid fa-cart-shopping"></i><h2>Tu carrito está vacío</h2><p>Agrega productos desde el catálogo.</p><a class="btn btn-primary" href="{{ url_for('index') }}#catalogo">Ver productos</a></div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

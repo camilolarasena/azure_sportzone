@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% block title %}{% if product %}Editar producto{% else %}Nuevo producto{% endif %} | SportZone{% endblock %}
+{% block content %}
+<section class="page-header admin-header">
+  <div class="container">
+    <span class="eyebrow">INVENTARIO Y GALERÍA</span>
+    <h1>{% if product %}Editar producto #{{ product['id'] }}{% else %}Crear producto{% endif %}</h1>
+    <p>Administra la información, el stock y las cuatro imágenes visibles en la página del producto.</p>
+  </div>
+</section>
+<section class="py-5 admin-page">
+  <div class="container">
+    <div class="admin-form-card mx-auto">
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="row g-3">
+          <div class="col-md-8">
+            <label class="form-label">Nombre</label>
+            <input class="form-control" name="name" value="{{ request.form.get('name', product['name'] if product else '') }}" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Marca</label>
+            <input class="form-control" name="brand" value="{{ request.form.get('brand', product['brand'] if product else '') }}" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Deporte</label>
+            {% set current_sport = request.form.get('sport', product['sport'] if product else '') %}
+            <select class="form-select" name="sport" required>
+              <option value="">Selecciona</option>
+              <option value="tenis" {% if current_sport == 'tenis' %}selected{% endif %}>Tenis</option>
+              <option value="golf" {% if current_sport == 'golf' %}selected{% endif %}>Golf</option>
+              <option value="squash" {% if current_sport == 'squash' %}selected{% endif %}>Squash</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Tipo</label>
+            <input class="form-control" name="product_type" value="{{ request.form.get('product_type', product['product_type'] if product else '') }}" placeholder="Driver, raqueta profesional..." required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Público</label>
+            <input class="form-control" name="audience" value="{{ request.form.get('audience', product['audience'] if product else 'adulto') }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Precio COP</label>
+            <input class="form-control" type="number" min="0" step="1" name="price" value="{{ request.form.get('price', product['price'] if product else '0') }}" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Stock disponible</label>
+            <input class="form-control" type="number" min="0" step="1" name="stock" value="{{ request.form.get('stock', product['stock'] if product else '0') }}" required>
+            <div class="form-text">Este valor se descuenta automáticamente después de cada pago aprobado.</div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Estado</label>
+            {% set current_active = request.form.get('active', product['active']|string if product else '1') %}
+            <select class="form-select" name="active">
+              <option value="1" {% if current_active == '1' %}selected{% endif %}>Activo</option>
+              <option value="0" {% if current_active == '0' %}selected{% endif %}>Oculto</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Descripción</label>
+            <textarea class="form-control" name="description" rows="4">{{ request.form.get('description', product['description'] if product else '') }}</textarea>
+          </div>
+        </div>
+
+        <div class="gallery-admin-block mt-5">
+          <div class="d-flex flex-column flex-md-row justify-content-between gap-2 mb-3">
+            <div>
+              <h2>Galería del producto</h2>
+              <p>Se requieren cuatro imágenes. Puedes pegar una URL o subir un archivo en cada espacio. La primera será la portada. Las imágenes locales se ajustan completas, sin recortarse.</p>
+            </div>
+            <span class="badge text-bg-primary align-self-start">4 imágenes obligatorias</span>
+          </div>
+          <div class="row g-4">
+            {% for position in range(1, 5) %}
+              {% set current_image = product_images[position - 1] if product_images|length >= position else '' %}
+              {% set field_value = request.form.get('image_url_' ~ position, current_image) %}
+              <div class="col-md-6">
+                <div class="image-slot-card">
+                  <div class="image-slot-heading">
+                    <strong>Imagen {{ position }}</strong>
+                    {% if position == 1 %}<span>Portada</span>{% endif %}
+                  </div>
+                  <div class="admin-image-preview">
+                    <img id="previewImage{{ position }}" src="{{ field_value or 'https://placehold.co/800x600?text=Imagen+' ~ position }}" alt="Vista previa de imagen {{ position }}">
+                  </div>
+                  <label class="form-label mt-3" for="imageUrl{{ position }}">URL o ruta de la imagen</label>
+                  <input class="form-control image-url-input" id="imageUrl{{ position }}" type="text" name="image_url_{{ position }}" value="{{ field_value }}" data-preview="previewImage{{ position }}" placeholder="https://...">
+                  <div class="image-option-divider"><span>o</span></div>
+                  <label class="form-label" for="imageFile{{ position }}">Subir archivo</label>
+                  <input class="form-control image-file-input" id="imageFile{{ position }}" type="file" name="image_file_{{ position }}" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" data-preview="previewImage{{ position }}">
+                  <div class="form-text">JPG, PNG o WebP. Máximo total del formulario: 8 MB. Se corrige la orientación y se optimiza automáticamente.</div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 justify-content-end mt-4">
+          <a class="btn btn-outline-secondary" href="{{ url_for('admin_dashboard') }}">Cancelar</a>
+          {% if product %}<a class="btn btn-outline-primary" href="{{ url_for('product_detail', product_id=product['id']) }}" target="_blank"><i class="fa-solid fa-eye me-2"></i>Ver producto</a>{% endif %}
+          <button class="btn btn-primary fw-bold" type="submit"><i class="fa-solid fa-floppy-disk me-2"></i>Guardar cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+{% endblock %}

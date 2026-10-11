@@ -1,0 +1,272 @@
+{% extends 'base.html' %}
+{% block title %}Analítica de ventas | SportZone{% endblock %}
+{% block content %}
+<section class="page-header analytics-header">
+  <div class="container d-flex flex-column flex-xl-row align-items-xl-end justify-content-between gap-3">
+    <div>
+      <span class="eyebrow">PANDAS + SQLITE</span>
+      <h1>Dashboard de ventas e inventario</h1>
+      <p>Indicadores calculados en Flask con pandas y visualizados con Chart.js.</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <a class="btn btn-outline-light" href="{{ url_for('admin_dashboard') }}">
+        <i class="fa-solid fa-arrow-left me-2"></i>Administración
+      </a>
+      <div class="dropdown">
+        <button class="btn btn-danger fw-bold dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+          <i class="fa-solid fa-file-pdf me-2"></i>Exportar PDF
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end shadow border-0">
+          {% for dataset, label in [('completo','Informe completo'), ('ventas','Ventas'), ('pedidos','Pedidos'), ('stock','Stock'), ('pagos','Pagos'), ('movimientos','Kardex')] %}
+          <li>
+            <a class="dropdown-item" href="{{ url_for('admin_analytics_pdf_dataset', dataset=dataset, start_date=filters.start_date, end_date=filters.end_date, sport=filters.sport, payment_method_id=filters.payment_method_id) }}">
+              {{ label }}
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="dropdown">
+        <button class="btn btn-warning fw-bold dropdown-toggle" data-bs-toggle="dropdown">
+          <i class="fa-solid fa-file-csv me-2"></i>Exportar CSV
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end shadow border-0">
+          {% for dataset, label in [('ventas','Ventas'), ('pedidos','Pedidos'), ('stock','Stock'), ('pagos','Pagos'), ('movimientos','Kardex')] %}
+          <li>
+            <a class="dropdown-item" href="{{ url_for('admin_analytics_export', dataset=dataset, start_date=filters.start_date, end_date=filters.end_date, sport=filters.sport, payment_method_id=filters.payment_method_id) }}">
+              {{ label }}
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="py-5 analytics-page">
+  <div class="container">
+    <form class="analytics-filter-card mb-4" method="get">
+      <div class="row g-3 align-items-end">
+        <div class="col-md-6 col-xl-2">
+          <label class="form-label" for="start_date">Fecha inicial</label>
+          <input class="form-control" id="start_date" type="date" name="start_date" value="{{ filters.start_date }}">
+        </div>
+        <div class="col-md-6 col-xl-2">
+          <label class="form-label" for="end_date">Fecha final</label>
+          <input class="form-control" id="end_date" type="date" name="end_date" value="{{ filters.end_date }}">
+        </div>
+        <div class="col-md-6 col-xl-2">
+          <label class="form-label" for="sport">Deporte</label>
+          <select class="form-select" id="sport" name="sport">
+            <option value="">Todos</option>
+            {% for option in ['tenis', 'golf', 'squash'] %}
+              <option value="{{ option }}" {% if filters.sport == option %}selected{% endif %}>{{ option|title }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6 col-xl-3">
+          <label class="form-label" for="payment_method_id">Método de pago</label>
+          <select class="form-select" id="payment_method_id" name="payment_method_id">
+            <option value="0">Todos</option>
+            {% for method in payment_methods %}
+              <option value="{{ method['id'] }}" {% if filters.payment_method_id == method['id'] %}selected{% endif %}>{{ method['name'] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-xl-3 d-flex gap-2">
+          <button class="btn btn-primary flex-grow-1" type="submit"><i class="fa-solid fa-filter me-2"></i>Aplicar</button>
+          <a class="btn btn-outline-secondary" href="{{ url_for('admin_analytics') }}" title="Limpiar filtros"><i class="fa-solid fa-rotate-left"></i></a>
+        </div>
+      </div>
+    </form>
+
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-xl-2"><div class="analytics-kpi"><span>Ventas productos</span><strong>{{ format_cop(analysis.kpis.sales_total) }}</strong><small>Sin incluir envío</small></div></div>
+      <div class="col-6 col-xl-2"><div class="analytics-kpi"><span>Pedidos</span><strong>{{ analysis.kpis.order_count }}</strong><small>Pagos aprobados</small></div></div>
+      <div class="col-6 col-xl-2"><div class="analytics-kpi"><span>Unidades vendidas</span><strong>{{ analysis.kpis.units_sold }}</strong><small>Artículos despachados</small></div></div>
+      <div class="col-6 col-xl-2"><div class="analytics-kpi"><span>Ticket promedio</span><strong>{{ format_cop(analysis.kpis.average_ticket) }}</strong><small>Venta / pedido</small></div></div>
+      <div class="col-6 col-xl-2"><div class="analytics-kpi"><span>Valor inventario</span><strong>{{ format_cop(analysis.kpis.inventory_value) }}</strong><small>Precio × stock</small></div></div>
+      <div class="col-6 col-xl-2"><div class="analytics-kpi {% if analysis.kpis.low_stock_count > 0 %}kpi-warning{% endif %}"><span>Stock crítico</span><strong>{{ analysis.kpis.low_stock_count }}</strong><small>Productos con ≤ 5</small></div></div>
+    </div>
+
+    <div class="row g-4 mb-4">
+      <div class="col-xl-8">
+        <div class="analytics-panel h-100">
+          <div class="analytics-panel-head"><div><h2>Ventas por día</h2><p>Evolución del valor vendido y número de pedidos.</p></div><i class="fa-solid fa-chart-line"></i></div>
+          <div class="chart-wrap chart-large"><canvas id="dailySalesChart"></canvas></div>
+        </div>
+      </div>
+      <div class="col-xl-4">
+        <div class="analytics-panel h-100">
+          <div class="analytics-panel-head"><div><h2>Ventas por deporte</h2><p>Participación del ingreso por categoría.</p></div><i class="fa-solid fa-chart-pie"></i></div>
+          <div class="chart-wrap"><canvas id="sportSalesChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+      <div class="col-xl-7">
+        <div class="analytics-panel h-100">
+          <div class="analytics-panel-head"><div><h2>Productos líderes</h2><p>Unidades vendidas para los diez productos con mayor ingreso.</p></div><i class="fa-solid fa-ranking-star"></i></div>
+          <div class="chart-wrap chart-large"><canvas id="topProductsChart"></canvas></div>
+        </div>
+      </div>
+      <div class="col-xl-5">
+        <div class="analytics-panel h-100">
+          <div class="analytics-panel-head"><div><h2>Métodos de pago</h2><p>Valor de las ventas asociado a cada método.</p></div><i class="fa-solid fa-credit-card"></i></div>
+          <div class="chart-wrap"><canvas id="paymentChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="analytics-panel mb-4">
+      <div class="analytics-panel-head"><div><h2>Productos con menor stock</h2><p>Prioriza la reposición antes de llegar a cero unidades.</p></div><i class="fa-solid fa-boxes-stacked"></i></div>
+      <div class="chart-wrap chart-stock"><canvas id="stockChart"></canvas></div>
+    </div>
+
+    <div class="row g-4 mb-4">
+      <div class="col-xl-6">
+        <div class="analytics-panel h-100">
+          <div class="analytics-panel-head"><div><h2>Ranking de productos</h2><p>Resultado agregado con groupby de pandas.</p></div></div>
+          <div class="table-responsive">
+            <table class="table analytics-table align-middle">
+              <thead><tr><th>Producto</th><th class="text-end">Unidades</th><th class="text-end">Ingreso</th></tr></thead>
+              <tbody>
+                {% for row in analysis.top_products %}
+                  <tr><td>{{ row.product_name }}</td><td class="text-end">{{ row.units }}</td><td class="text-end fw-bold">{{ format_cop(row.revenue) }}</td></tr>
+                {% else %}
+                  <tr><td colspan="3" class="text-center text-muted py-4">No hay ventas para los filtros seleccionados.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-6">
+        <div class="analytics-panel h-100">
+          <div class="analytics-panel-head"><div><h2>Alertas de inventario</h2><p>Stock actual y valor almacenado por producto.</p></div></div>
+          <div class="table-responsive">
+            <table class="table analytics-table align-middle">
+              <thead><tr><th>Producto</th><th>Deporte</th><th class="text-end">Stock</th><th class="text-end">Valor</th></tr></thead>
+              <tbody>
+                {% for row in analysis.stock_table %}
+                  <tr>
+                    <td>{{ row.name }}</td><td>{{ row.sport|title }}</td>
+                    <td class="text-end"><span class="badge {% if row.stock <= 5 %}text-bg-danger{% elif row.stock <= 10 %}text-bg-warning{% else %}text-bg-success{% endif %}">{{ row.stock }}</span></td>
+                    <td class="text-end">{{ format_cop(row.inventory_value) }}</td>
+                  </tr>
+                {% else %}
+                  <tr><td colspan="4" class="text-center text-muted py-4">No hay productos.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-4">
+      <div class="col-xl-6">
+        <div class="analytics-panel h-100">
+          <div class="analytics-panel-head"><div><h2>Pagos recientes</h2><p>Información de la tabla payments.</p></div></div>
+          <div class="table-responsive">
+            <table class="table analytics-table align-middle">
+              <thead><tr><th>Pedido</th><th>Método</th><th>Referencia</th><th class="text-end">Valor</th></tr></thead>
+              <tbody>
+                {% for row in analysis.recent_payments %}
+                  <tr><td>#{{ row.order_id }}<small class="d-block text-muted">{{ row.paid_at }}</small></td><td>{{ row.payment_method }}</td><td><code>{{ row.transaction_reference }}</code></td><td class="text-end fw-bold">{{ format_cop(row.amount) }}</td></tr>
+                {% else %}
+                  <tr><td colspan="4" class="text-center text-muted py-4">No hay pagos registrados.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-6">
+        <div class="analytics-panel h-100">
+          <div class="analytics-panel-head"><div><h2>Kardex reciente</h2><p>Entradas, ventas y ajustes de inventario.</p></div></div>
+          <div class="table-responsive">
+            <table class="table analytics-table align-middle">
+              <thead><tr><th>Producto</th><th>Movimiento</th><th class="text-end">Cambio</th><th class="text-end">Saldo</th></tr></thead>
+              <tbody>
+                {% for row in analysis.recent_movements %}
+                  <tr>
+                    <td>{{ row.product_name }}<small class="d-block text-muted">{{ row.created_at }} · {{ row.responsible }}</small></td>
+                    <td>{{ row.movement_type|replace('_',' ')|title }}</td>
+                    <td class="text-end fw-bold {% if row.quantity_change < 0 %}text-danger{% else %}text-success{% endif %}">{% if row.quantity_change > 0 %}+{% endif %}{{ row.quantity_change }}</td>
+                    <td class="text-end">{{ row.stock_after }}</td>
+                  </tr>
+                {% else %}
+                  <tr><td colspan="4" class="text-center text-muted py-4">No hay movimientos.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+  const chartData = {{ chart_data|tojson }};
+  const cop = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
+  const palette = ['#1a3c5e', '#e8a020', '#2ecc71', '#7b2d8b', '#db5a42', '#4f7cac'];
+  Chart.defaults.font.family = "'Open Sans', sans-serif";
+  Chart.defaults.color = '#59636e';
+
+  const hasData = values => Array.isArray(values) && values.length > 0;
+  const commonOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'bottom' } }
+  };
+
+  new Chart(document.getElementById('dailySalesChart'), {
+    type: 'line',
+    data: {
+      labels: chartData.daily.labels,
+      datasets: [
+        { label: 'Ventas', data: chartData.daily.sales, borderColor: palette[0], backgroundColor: 'rgba(26,60,94,.12)', fill: true, tension: .3, yAxisID: 'y' },
+        { label: 'Pedidos', data: chartData.daily.orders, borderColor: palette[1], backgroundColor: palette[1], tension: .3, yAxisID: 'y1' }
+      ]
+    },
+    options: {
+      ...commonOptions,
+      scales: {
+        y: { beginAtZero: true, ticks: { callback: value => cop.format(value) } },
+        y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { precision: 0 } }
+      }
+    }
+  });
+
+  new Chart(document.getElementById('sportSalesChart'), {
+    type: 'doughnut',
+    data: { labels: chartData.sport.labels, datasets: [{ data: chartData.sport.values, backgroundColor: palette.slice(0, Math.max(chartData.sport.values.length, 1)), borderWidth: 0 }] },
+    options: { ...commonOptions, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: context => `${context.label}: ${cop.format(context.raw)}` } } } }
+  });
+
+  new Chart(document.getElementById('topProductsChart'), {
+    type: 'bar',
+    data: { labels: chartData.products.labels, datasets: [{ label: 'Unidades', data: chartData.products.units, backgroundColor: palette[0], borderRadius: 6 }] },
+    options: { ...commonOptions, indexAxis: 'y', scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+  });
+
+  new Chart(document.getElementById('paymentChart'), {
+    type: 'polarArea',
+    data: { labels: chartData.payments.labels, datasets: [{ data: chartData.payments.values, backgroundColor: palette.map(color => `${color}cc`), borderWidth: 0 }] },
+    options: { ...commonOptions, scales: { r: { ticks: { display: false } } }, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: context => `${context.label}: ${cop.format(context.raw)}` } } } }
+  });
+
+  new Chart(document.getElementById('stockChart'), {
+    type: 'bar',
+    data: { labels: chartData.stock.labels, datasets: [{ label: 'Unidades disponibles', data: chartData.stock.values, backgroundColor: chartData.stock.values.map(value => value <= 5 ? '#db5a42' : value <= 10 ? '#e8a020' : '#2ecc71'), borderRadius: 6 }] },
+    options: { ...commonOptions, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+  });
+</script>
+{% endblock %}

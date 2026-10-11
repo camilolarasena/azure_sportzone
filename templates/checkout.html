@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block title %}Pago de prueba | SportZone{% endblock %}
+{% block content %}
+<section class="page-header">
+  <div class="container">
+    <span class="eyebrow">FINALIZAR COMPRA</span>
+    <h1>Pago de prueba</h1>
+    <p>Esta pantalla simula una aprobación. No solicita ni procesa datos bancarios reales.</p>
+  </div>
+</section>
+
+<section class="py-5">
+  <div class="container">
+    <div class="row g-4 justify-content-center">
+      <div class="col-lg-7">
+        <div class="checkout-card">
+          <div class="demo-payment-banner">
+            <i class="fa-solid fa-flask"></i>
+            <div>
+              <strong>Entorno demostrativo</strong>
+              <span>El pedido, el pago y el descuento del stock se guardan en una sola transacción SQLite.</span>
+            </div>
+          </div>
+
+          <h2 class="mt-4">Productos</h2>
+          {% for item in items %}
+            <div class="checkout-line">
+              <span>{{ item.quantity }} × {{ item.product['name'] }}</span>
+              <strong>{{ format_cop(item.line_total) }}</strong>
+            </div>
+          {% endfor %}
+
+          <div class="checkout-line text-muted">
+            <span>Envío</span>
+            <strong>{% if shipping == 0 %}Gratis{% else %}{{ format_cop(shipping) }}{% endif %}</strong>
+          </div>
+          <div class="checkout-total">
+            <span>Total</span>
+            <strong>{{ format_cop(total) }}</strong>
+          </div>
+
+          <form method="post" class="mt-4" id="checkoutForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="mb-4">
+              <label for="paymentMethod" class="form-label fw-bold">Método de pago</label>
+              <select class="form-select form-select-lg" id="paymentMethod" name="payment_method_id" required>
+                <option value="" selected disabled>Selecciona un método</option>
+                {% for method in payment_methods %}
+                  <option value="{{ method['id'] }}">
+                    {{ method['name'] }}{% if method['code'] == 'demo' %} — recomendado para pruebas{% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+              <div class="form-text">No se capturan números de tarjeta ni credenciales bancarias.</div>
+            </div>
+
+            <button class="btn btn-success btn-lg w-100 fw-bold" type="submit" id="confirmPaymentButton">
+              <i class="fa-solid fa-lock me-2"></i>Confirmar pago de prueba
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.getElementById("checkoutForm")?.addEventListener("submit", () => {
+    const button = document.getElementById("confirmPaymentButton");
+    if (!button) return;
+    button.disabled = true;
+    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i>Procesando pago...';
+  });
+</script>
+{% endblock %}

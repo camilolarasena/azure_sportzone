@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block title %}Crear cuenta | SportZone{% endblock %}
+{% block content %}
+<section class="auth-page">
+  <div class="container py-5">
+    <div class="auth-card mx-auto">
+      <div class="auth-heading"><span class="auth-icon green"><i class="fa-solid fa-user-plus"></i></span><div><h1>Crear cuenta</h1><p>El registro público crea únicamente usuarios compradores.</p></div></div>
+      <form method="post" class="mt-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="mb-3"><label class="form-label">Nombre completo</label><input class="form-control form-control-lg" name="name" value="{{ request.form.get('name', '') }}" autocomplete="name" required></div>
+        <div class="mb-3"><label class="form-label">Correo electrónico</label><input class="form-control form-control-lg" type="email" name="email" value="{{ request.form.get('email', '') }}" autocomplete="email" required></div>
+        <div class="mb-3"><label class="form-label">Contraseña</label><div class="password-wrap"><input class="form-control form-control-lg" id="registerPassword" type="password" name="password" minlength="8" autocomplete="new-password" required><button type="button" class="password-toggle" data-target="registerPassword"><i class="fa-solid fa-eye"></i></button></div><div class="form-text">Mínimo 8 caracteres. El servidor almacenará solamente el hash.</div></div>
+        <div class="mb-4"><label class="form-label">Confirmar contraseña</label><div class="password-wrap"><input class="form-control form-control-lg" id="confirmPassword" type="password" name="password_confirm" minlength="8" autocomplete="new-password" required><button type="button" class="password-toggle" data-target="confirmPassword"><i class="fa-solid fa-eye"></i></button></div></div>
+        <button class="btn btn-primary btn-lg w-100 fw-bold" type="submit">Crear cuenta de usuario</button>
+      </form>
+      <p class="text-center mt-4 mb-0">¿Ya tienes cuenta? <a href="{{ url_for('login') }}">Inicia sesión</a></p>
+    </div>
+  </div>
+</section>
+{% endblock %}

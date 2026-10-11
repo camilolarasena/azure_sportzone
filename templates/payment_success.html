@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block title %}Pago aprobado | SportZone{% endblock %}
+{% block content %}
+<section class="py-5">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-lg-8">
+        <div class="checkout-card text-center">
+          <div class="display-3 text-success mb-3">
+            <i class="fa-solid fa-circle-check"></i>
+          </div>
+          <span class="eyebrow">OPERACIÓN EXITOSA</span>
+          <h1 class="mt-2">Pago aprobado</h1>
+          <p class="text-muted">El pedido fue almacenado y el inventario fue actualizado correctamente.</p>
+
+          <div class="row g-3 my-4 text-start">
+            <div class="col-md-4">
+              <div class="border rounded-3 p-3 h-100">
+                <small class="text-muted d-block">Pedido</small>
+                <strong>#{{ order['id'] }}</strong>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="border rounded-3 p-3 h-100">
+                <small class="text-muted d-block">Método</small>
+                <strong>{{ payment['method_name'] if payment else 'Pago de prueba' }}</strong>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="border rounded-3 p-3 h-100">
+                <small class="text-muted d-block">Total</small>
+                <strong>{{ format_cop(order['total']) }}</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="text-start border-top pt-3">
+            {% for item in items %}
+              <div class="checkout-line">
+                <span>{{ item['quantity'] }} × {{ item['product_name'] }}</span>
+                <strong>{{ format_cop(item['unit_price'] * item['quantity']) }}</strong>
+              </div>
+            {% endfor %}
+          </div>
+
+          {% if payment %}
+            <p class="small text-muted mt-3 mb-0">
+              Referencia: {{ payment['transaction_reference'] }}
+            </p>
+          {% endif %}
+
+          <div class="d-flex flex-column flex-sm-row justify-content-center gap-2 mt-4">
+            <a class="btn btn-primary" href="{{ url_for('orders') }}">
+              <i class="fa-solid fa-box me-2"></i>Ver mis pedidos
+            </a>
+            <a class="btn btn-outline-primary" href="{{ url_for('index') }}#catalogo">
+              Seguir comprando
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

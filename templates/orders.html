@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}Mis pedidos | SportZone{% endblock %}
+{% block content %}
+<section class="page-header"><div class="container"><span class="eyebrow">HISTORIAL</span><h1>Mis pedidos</h1><p>Compras asociadas a {{ g.user['email'] }}.</p></div></section>
+<section class="py-5">
+  <div class="container">
+    {% if orders %}
+      <div class="order-list">
+      {% for entry in orders %}
+        <article class="order-card">
+          <div class="order-head"><div><span>Pedido</span><strong>#{{ entry.order['id'] }}</strong></div><div><span>Fecha</span><strong>{{ entry.order['created_at'] }}</strong></div><div><span>Estado</span><strong class="status-pill">{{ entry.order['status'].replace('_', ' ') }}</strong></div><div><span>Total</span><strong>{{ format_cop(entry.order['total']) }}</strong></div></div>
+          <div class="order-lines">{% for line in entry.items %}<div><span>{{ line['quantity'] }} × {{ line['product_name'] }}</span><strong>{{ format_cop(line['unit_price'] * line['quantity']) }}</strong></div>{% endfor %}</div>
+        </article>
+      {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state"><i class="fa-solid fa-box-open"></i><h2>Aún no tienes pedidos</h2><p>Tu historial aparecerá después del primer pago.</p><a class="btn btn-primary" href="{{ url_for('index') }}#catalogo">Comprar</a></div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

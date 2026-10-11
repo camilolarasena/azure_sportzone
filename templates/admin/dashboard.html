@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% block title %}Administración | SportZone{% endblock %}
+{% block content %}
+<section class="page-header admin-header">
+  <div class="container d-flex flex-column flex-lg-row align-items-lg-end justify-content-between gap-3">
+    <div>
+      <span class="eyebrow">ROL ADMIN</span>
+      <h1>Panel administrativo</h1>
+      <p>Gestiona inventario, cuatro imágenes por producto, usuarios y pedidos.</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <a class="btn btn-outline-light fw-bold" href="{{ url_for('admin_analytics') }}"><i class="fa-solid fa-chart-line me-2"></i>Dashboard analítico</a>
+      <a class="btn btn-warning fw-bold" href="{{ url_for('admin_product_new') }}"><i class="fa-solid fa-plus me-2"></i>Nuevo producto</a>
+    </div>
+  </div>
+</section>
+<section class="py-5 admin-page">
+  <div class="container">
+    <div class="row g-3 mb-5">
+      <div class="col-6 col-lg-3"><div class="stat-card"><i class="fa-solid fa-boxes-stacked"></i><div><span>Productos</span><strong>{{ stats.products }}</strong></div></div></div>
+      <div class="col-6 col-lg-3"><div class="stat-card"><i class="fa-solid fa-users"></i><div><span>Usuarios</span><strong>{{ stats.users }}</strong></div></div></div>
+      <div class="col-6 col-lg-3"><div class="stat-card"><i class="fa-solid fa-receipt"></i><div><span>Pedidos</span><strong>{{ stats.orders }}</strong></div></div></div>
+      <div class="col-6 col-lg-3"><div class="stat-card"><i class="fa-solid fa-sack-dollar"></i><div><span>Ventas prueba</span><strong>{{ format_cop(stats.sales) }}</strong></div></div></div>
+    </div>
+
+    <div class="admin-section">
+      <div class="admin-section-head d-flex flex-column flex-lg-row justify-content-between gap-3">
+        <div><h2>Productos e inventario</h2><p>Cambia el stock rápidamente o abre el editor para modificar información e imágenes.</p></div>
+        <div class="admin-help"><i class="fa-solid fa-circle-info"></i> El primer archivo de la galería funciona como portada.</div>
+      </div>
+      <div class="table-responsive">
+        <table class="table admin-table align-middle">
+          <thead><tr><th>Producto</th><th>Deporte</th><th>Precio</th><th>Stock rápido</th><th>Estado</th><th>Acciones</th></tr></thead>
+          <tbody>
+            {% for product in products %}
+              <tr>
+                <td>
+                  <div class="admin-product-cell">
+                    <img src="{{ product['image_url'] or 'https://placehold.co/120x90?text=SportZone' }}" alt="{{ product['name'] }}">
+                    <div><strong>{{ product['name'] }}</strong><small>#{{ product['id'] }} · {{ product['brand'] }} · {{ product['product_type'] }}</small></div>
+                  </div>
+                </td>
+                <td><span class="sport-label {{ product['sport'] }} position-static">{{ product['sport'] }}</span></td>
+                <td>{{ format_cop(product['price']) }}</td>
+                <td>
+                  <form class="quick-stock-form" method="post" action="{{ url_for('admin_product_stock', product_id=product['id']) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input class="form-control form-control-sm" type="number" name="stock" min="0" step="1" value="{{ product['stock'] }}" aria-label="Stock de {{ product['name'] }}">
+                    <button class="btn btn-sm btn-success" type="submit" title="Actualizar stock"><i class="fa-solid fa-check"></i></button>
+                  </form>
+                </td>
+                <td>{% if product['active'] %}<span class="badge text-bg-success">Activo</span>{% else %}<span class="badge text-bg-secondary">Oculto</span>{% endif %}</td>
+                <td>
+                  <div class="d-flex gap-2">
+                    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('product_detail', product_id=product['id']) }}" title="Ver producto"><i class="fa-solid fa-eye"></i></a>
+                    <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin_product_edit', product_id=product['id']) }}" title="Editar producto, stock e imágenes"><i class="fa-solid fa-pen"></i></a>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="admin-section mt-5">
+      <div class="admin-section-head"><div><h2>Usuarios</h2><p>Las contraseñas no se muestran porque solamente se conserva su hash.</p></div></div>
+      <div class="table-responsive"><table class="table admin-table align-middle"><thead><tr><th>ID</th><th>Nombre</th><th>Correo</th><th>Rol</th><th>Registro</th></tr></thead><tbody>{% for user in users %}<tr><td>#{{ user['id'] }}</td><td>{{ user['name'] }}</td><td>{{ user['email'] }}</td><td><span class="badge {% if user['role'] == 'admin' %}text-bg-warning{% else %}text-bg-primary{% endif %}">{{ user['role'] }}</span></td><td>{{ user['created_at'] }}</td></tr>{% endfor %}</tbody></table></div>
+    </div>
+
+    <div class="admin-section mt-5">
+      <div class="admin-section-head"><div><h2>Pedidos recientes</h2><p>Últimos 30 pagos de prueba registrados.</p></div></div>
+      <div class="table-responsive"><table class="table admin-table align-middle"><thead><tr><th>Pedido</th><th>Cliente</th><th>Correo</th><th>Método</th><th>Total</th><th>Estado</th><th>Fecha</th></tr></thead><tbody>{% for order in orders %}<tr><td>#{{ order['id'] }}</td><td>{{ order['customer_name'] }}</td><td>{{ order['customer_email'] }}</td><td>{{ order['payment_method'] }}</td><td>{{ format_cop(order['total']) }}</td><td><span class="badge text-bg-success">{{ order['status'].replace('_', ' ') }}</span></td><td>{{ order['created_at'] }}</td></tr>{% else %}<tr><td colspan="7" class="text-center text-muted py-4">Todavía no hay pedidos.</td></tr>{% endfor %}</tbody></table></div>
+    </div>
+  </div>
+</section>
+{% endblock %}
