@@ -1,12 +1,15 @@
-"""Adaptador SQL para las consultas existentes del proyecto con flask_mysqldb."""
-from MySQLdb.cursors import DictCursor
+"""Adaptador PostgreSQL (psycopg 3) para SportZone.
+
+Mantiene la interfaz execute/executemany/commit/rollback del proyecto original.
+"""
+from psycopg import connect
+from psycopg.rows import dict_row
 from sqlalchemy import create_engine, URL
 
 
 class Result:
     def __init__(self, cursor):
         self.rows = list(cursor.fetchall()) if cursor.description is not None else []
-        self.lastrowid = cursor.lastrowid
         self.rowcount = cursor.rowcount
 
     def fetchone(self):
@@ -18,36 +21,44 @@ class Result:
 
 
 class DatabaseAdapter:
-    def __init__(self, connection, settings):
-        self.connection = connection
-        # Esta conexion independiente se utiliza exclusivamente en analytics con pandas.
+    def __init__(self, settings):
+        self.connection = connect(
+            host=settings["PGHOST"],
+            port=int(settings["PGPORT"]),
+            dbname=settings["PGDATABASE"],
+            user=settings["PGUSER"],
+            password=settings["PGPASSWORD"],
+            sslmode=settings["PGSSLMODE"],
+            row_factory=dict_row,
+            connect_timeout=15,
+        )
         self.sqlalchemy_engine = create_engine(
             URL.create(
-                "mysql+mysqldb",
-                username=settings["MYSQL_USER"],
-                password=settings["MYSQL_PASSWORD"],
-                host=settings["MYSQL_HOST"],
-                port=int(settings["MYSQL_PORT"]),
-                database=settings["MYSQL_DB"],
+                "postgresql+psycopg",
+                username=settings["PGUSER"],
+                password=settings["PGPASSWORD"],
+                host=settings["PGHOST"],
+                port=int(settings["PGPORT"]),
+                database=settings["PGDATABASE"],
+                query={"sslmode": settings["PGSSLMODE"]},
             ),
             pool_pre_ping=True,
         )
 
+    @staticmethod
+    def _placeholders(sql):
+        # Las consultas originales utilizan marcadores ?; psycopg usa %s.
+        return sql.replace("?", "%s")
+
     def execute(self, sql, params=None):
-        cursor = self.connection.cursor(DictCursor)
-        try:
-            cursor.execute(sql.replace("?", "%s"), tuple(params or ()))
+        with self.connection.cursor() as cursor:
+            cursor.execute(self._placeholders(sql), tuple(params or ()))
             return Result(cursor)
-        finally:
-            cursor.close()
 
     def executemany(self, sql, params):
-        cursor = self.connection.cursor(DictCursor)
-        try:
-            cursor.executemany(sql.replace("?", "%s"), params)
+        with self.connection.cursor() as cursor:
+            cursor.executemany(self._placeholders(sql), params)
             return Result(cursor)
-        finally:
-            cursor.close()
 
     def commit(self):
         self.connection.commit()
@@ -56,5 +67,5 @@ class DatabaseAdapter:
         self.connection.rollback()
 
     def close(self):
-        # flask_mysqldb cierra la conexion de MySQL al finalizar app_context.
         self.sqlalchemy_engine.dispose()
+        self.connection.close()

@@ -1,17 +1,19 @@
-"""Configuracion local de SportZone (NO publicar en GitHub)."""
+"""Configuracion segura de SportZone PostgreSQL / Azure App Service."""
+import os
 
-# Conexion MySQL de XAMPP: ajusta estos valores segun tu instalacion.
-MYSQL_HOST = "localhost"
-MYSQL_PORT = 3306
-MYSQL_DB = "sportzone"
-MYSQL_USER = "root"
-MYSQL_PASSWORD = ""
+PGHOST = os.environ.get("PGHOST", "tiendavirtualtgs-server.postgres.database.azure.com")
+PGPORT = int(os.environ.get("PGPORT", "5432"))
+PGDATABASE = os.environ.get("PGDATABASE", "tiendavirtualtgs-database")
+PGUSER = os.environ.get("PGUSER", "tcuoaibwzb")
+PGPASSWORD = os.environ.get("PGPASSWORD")
+PGSSLMODE = os.environ.get("PGSSLMODE", "require")
 
-# Seguridad de Flask. Mantener privada esta clave y no cambiarla a diario.
-SECRET_KEY = "B7bB9An_2cGlDbUZDl1A01825fg3m-Fb8pC9aqvFPmeMXmqJAizJVMlBB6wUgtYe"
-SESSION_COOKIE_SECURE = False  # Cambiar a True cuando utilices HTTPS.
-
-# Configuracion opcional.
-SEED_PRODUCTS = False  # No insertar productos de ejemplo si ya importaste los datos.
-ADMIN_EMAIL = ""
-ADMIN_PASSWORD = ""  # Se recomienda crear el admin con el comando Flask.
+SECRET_KEY = os.environ.get("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("Configura SECRET_KEY en Variables de entorno de App Service.")
+if not PGPASSWORD:
+    raise RuntimeError("Configura PGPASSWORD en Variables de entorno de App Service.")
+SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "true").lower() in {"1", "true", "yes"}
+SEED_PRODUCTS = os.environ.get("SEED_PRODUCTS", "false").lower() in {"1", "true", "yes"}
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")

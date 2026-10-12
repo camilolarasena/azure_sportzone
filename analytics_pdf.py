@@ -192,7 +192,7 @@ def _header_footer(canvas: Any, doc: SimpleDocTemplate) -> None:
     canvas.setFillColor(MUTED)
     canvas.setFont("Helvetica", 8)
     canvas.drawRightString(width - 15 * mm, 8 * mm, f"Pagina {doc.page}")
-    canvas.drawString(15 * mm, 8 * mm, "Generado desde MySQL con pandas, matplotlib y ReportLab")
+    canvas.drawString(15 * mm, 8 * mm, "Generado desde PostgreSQL con pandas, matplotlib y ReportLab")
     canvas.restoreState()
 
 
@@ -415,7 +415,7 @@ def build_analytics_pdf(
 
 
 def _display_value(value: Any, kind: str = "text") -> str:
-    """Convierte valores de pandas/SQLite a texto apto para ReportLab."""
+    """Convierte valores de pandas/PostgreSQL a texto apto para ReportLab."""
     if value is None:
         return ""
     if kind == "money":

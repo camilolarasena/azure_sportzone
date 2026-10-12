@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from MySQLdb import Error as DatabaseError, IntegrityError
-from flask_mysqldb import MySQL
+from psycopg import Error as DatabaseError, IntegrityError
 from database import DatabaseAdapter
 from functools import wraps
 from pathlib import Path
 from typing import Any, Callable, TypeVar
 import secrets
 from config import (
-    MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB,
+    PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE, PGSSLMODE,
     SECRET_KEY, SESSION_COOKIE_SECURE, SEED_PRODUCTS, ADMIN_EMAIL, ADMIN_PASSWORD,
 )
 
@@ -273,8 +272,6 @@ def allowed_image_file(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
 
 
-mysql = MySQL()
-
 def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_mapping(
@@ -283,25 +280,24 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=SESSION_COOKIE_SECURE,
         MAX_CONTENT_LENGTH=8 * 1024 * 1024,
-        MYSQL_HOST=MYSQL_HOST,
-        MYSQL_PORT=MYSQL_PORT,
-        MYSQL_USER=MYSQL_USER,
-        MYSQL_PASSWORD=MYSQL_PASSWORD,
-        MYSQL_DB=MYSQL_DB,
-        MYSQL_CHARSET="utf8mb4",
+        PGHOST=PGHOST,
+        PGPORT=PGPORT,
+        PGUSER=PGUSER,
+        PGPASSWORD=PGPASSWORD,
+        PGDATABASE=PGDATABASE,
+        PGSSLMODE=PGSSLMODE,
     )
 
     if test_config:
         app.config.update(test_config)
 
-    mysql.init_app(app)
 
     Path(app.instance_path).mkdir(parents=True, exist_ok=True)
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
     def get_db() -> DatabaseAdapter:
         if "db" not in g:
-            g.db = DatabaseAdapter(mysql.connection, app.config)
+            g.db = DatabaseAdapter(app.config)
         return g.db
 
     def close_db(_: BaseException | None = None) -> None:
@@ -313,8 +309,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     def init_db(seed: bool = True) -> None:
         db = get_db()
-        # Importa schema_mysql.sql en phpMyAdmin antes de iniciar.
-        # La inicializacion solo carga registros faltantes.
+        # Importa sportzone_postgresql.sql en PostgreSQL antes de iniciar.
+        # Esta rutina solo completa datos faltantes.
         if seed and next(iter(db.execute("SELECT COUNT(*) FROM products").fetchone().values())) == 0:
             db.executemany(
                 """
@@ -325,9 +321,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 SEED_PRODUCTS,
             )
 
-        # Catalogo de metodos de pago. INSERT IGNORE conserva los cambios existentes.
+        # Catalogo de metodos de pago sin duplicar codigos existentes.
         db.executemany(
-            "INSERT IGNORE INTO payment_methods (code, name, active) VALUES (?, ?, ?)",
+            "INSERT INTO payment_methods (code, name, active) VALUES (?, ?, ?) ON CONFLICT (code) DO NOTHING",
             PAYMENT_METHODS,
         )
 
@@ -338,10 +334,11 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if demo_method:
             db.execute(
                 """
-                INSERT IGNORE INTO payments
+                INSERT INTO payments
                     (order_id, payment_method_id, amount, status, transaction_reference, paid_at)
-                SELECT id, ?, total, 'approved', CONCAT('LEGACY-', id), created_at
+                SELECT id, ?, total, 'approved', 'LEGACY-' || id::text, created_at
                 FROM orders
+                ON CONFLICT (order_id) DO NOTHING
                 """,
                 (demo_method["id"],),
             )
@@ -720,7 +717,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             payment_method_name = str(selected_method["name"])
             try:
                 db.commit()
-                db.execute("START TRANSACTION")
+                # psycopg inicia la transaccion automaticamente en la primera consulta.
                 cart = get_cart()
                 validated_items: list[tuple[dict, int]] = []
                 product_subtotal = 0
@@ -744,10 +741,10 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 final_total = product_subtotal + final_shipping
 
                 cursor = db.execute(
-                    "INSERT INTO orders (user_id, total, status) VALUES (?, ?, 'pagado_prueba')",
+                    "INSERT INTO orders (user_id, total, status) VALUES (?, ?, 'pagado_prueba') RETURNING id",
                     (g.user["id"], final_total),
                 )
-                order_id = int(cursor.lastrowid)
+                order_id = int(cursor.fetchone()["id"])
                 transaction_reference = f"DEMO-{order_id}-{secrets.token_hex(4).upper()}"
 
                 db.execute(
@@ -1021,11 +1018,11 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                     """
                     INSERT INTO products
                         (name, brand, sport, product_type, audience, description, price, stock, image_url, active)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
                     """,
                     (*product_data[:-1], images[0], product_data[-1]),
                 )
-                product_id = int(cursor.lastrowid)
+                product_id = int(cursor.fetchone()["id"])
                 replace_product_images(db, product_id, images)
                 initial_stock = int(product_data[7])
                 db.execute(
@@ -1131,21 +1128,22 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         flash(f"Stock del producto #{product_id} actualizado a {stock} unidades.", "success")
         return redirect(url_for("admin_dashboard"))
 
-    def read_mysql_frame(sql: str, db: DatabaseAdapter) -> pd.DataFrame:
+    def read_postgres_frame(sql: str, db: DatabaseAdapter) -> pd.DataFrame:
         from sqlalchemy import text
-        return pd.read_sql_query(text(sql), db.sqlalchemy_engine)
+        with db.sqlalchemy_engine.connect() as connection:
+            return pd.read_sql_query(text(sql), connection)
 
     def load_analytics_frames() -> dict[str, pd.DataFrame]:
-        """Lee las tablas de MySQL con pandas y devuelve DataFrames para analizar."""
+        """Lee las tablas de PostgreSQL con pandas y devuelve DataFrames para analizar."""
         db = get_db()
-        orders_df = read_mysql_frame(
+        orders_df = read_postgres_frame(
             """
             SELECT o.id AS order_id, o.user_id, o.total, o.status AS order_status,
                    o.created_at, u.name AS customer_name, u.email AS customer_email,
                    COALESCE(pm.id, 0) AS payment_method_id,
                    COALESCE(pm.name, 'Sin registrar') AS payment_method,
                    COALESCE(pay.status, 'approved') AS payment_status,
-                   COALESCE(pay.transaction_reference, CONCAT('LEGACY-', o.id)) AS transaction_reference
+                   COALESCE(pay.transaction_reference, 'LEGACY-' || o.id::text) AS transaction_reference
             FROM orders AS o
             JOIN users AS u ON u.id = o.user_id
             LEFT JOIN payments AS pay ON pay.order_id = o.id
@@ -1153,7 +1151,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             """,
             db,
         )
-        items_df = read_mysql_frame(
+        items_df = read_postgres_frame(
             """
             SELECT oi.id AS item_id, oi.order_id, oi.product_id, oi.product_name,
                    oi.unit_price, oi.quantity,
@@ -1172,7 +1170,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             """,
             db,
         )
-        stock_df = read_mysql_frame(
+        stock_df = read_postgres_frame(
             """
             SELECT id AS product_id, name, brand, sport, product_type, price, stock,
                    active, (price * stock) AS inventory_value
@@ -1181,7 +1179,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             """,
             db,
         )
-        payments_df = read_mysql_frame(
+        payments_df = read_postgres_frame(
             """
             SELECT pay.id AS payment_id, pay.order_id, pay.amount, pay.status,
                    pay.transaction_reference, pay.paid_at,
@@ -1192,7 +1190,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             """,
             db,
         )
-        movements_df = read_mysql_frame(
+        movements_df = read_postgres_frame(
             """
             SELECT im.id, im.product_id, p.name AS product_name, p.sport,
                    im.movement_type, im.quantity_change, im.stock_before,
